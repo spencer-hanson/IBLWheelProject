@@ -22,6 +22,7 @@ def get_dataset_metadata(one, dataset_tag):
 
 
 def main():
+    # Download https://github.com/int-brain-lab/paper-brain-wide-map/tree/main
     ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
     one = ONE(password='international')
 
@@ -40,7 +41,19 @@ def main():
 
     [eid, pname] = one.pid2eid(pid)
 
+    a = one.list_datasets(eid, collection="alf")
+    b = one.list_datasets(eid, collection=f'alf/{pname}')
+    gg = one.load_object(eid, "electrodeSites", collection=f'alf/{pname}')
+    reg = ba.regions.id2acronym(gg["brainLocationIds_ccf_2017"])
+    # group all sc? exclude superficial SC
+    # Any recording with SNR or in the SC
+    tw = 2
+
     """
+    "SCs", "SCop", "SCsg", "SCzo",  # Superficial 
+    "SCm", "SCdg", "SCdw", "SCiw", "SCig", "SCig-a", "SCig-b", "SCig-c",  # Intermediate/Deep
+    "SNr", "csc",  # SNr
+
     ephysData.raw.meta
     one.list_datasets(eid, collection="alf")
     one.list_datasets(eid, collection=f'alf/{pname}')
@@ -53,6 +66,21 @@ def main():
     ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
     spikes, clusters, channels = ssl.load_spike_sorting()
     clusters = ssl.merge_clusters(spikes, clusters, channels)
+
+    import matplotlib.pyplot as plt
+    import matplotlib
+
+    matplotlib.use('TkAgg')
+    x = channels["x"]
+    y = channels["y"]
+    z = channels["z"]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.scatter(x, y, z)
+    plt.show()
+    tw = 2
 
     # ---------------------------------------------------
     # Restrict to only good clusters
