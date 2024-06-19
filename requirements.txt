@@ -1,2 +1,4 @@
 ONE-api
 ibllib
+matplotlib
+numpy
