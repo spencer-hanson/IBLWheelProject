@@ -1,4 +1,5 @@
 import json
+import os.path
 import pickle
 
 import numpy as np
@@ -15,7 +16,6 @@ ALL_REGIONS = {
     "snr": ["SNr", "csc"]  # SNr
 }
 REGION_NOT_DEFINED = "not_defined"
-GOOD_UNIT_COUNTS = []  # debugging on unit sizes
 
 
 def region_lookup(region):
@@ -71,11 +71,12 @@ def brainregion_check(one, ba: AllenAtlas, pid: str):
         return False
 
 
-def get_datas(one, ba):
-    # TODO Comment me out if you don't have this file cached
-    fp = open("passing-sessions.json", "r")
-    data = json.load(fp)
-    return data
+def download_session_data(one, ba):
+    filename = "passing-sessions.json"
+    if os.path.exists(filename):
+        fp = open(filename, "r")
+        data = json.load(fp)
+        return data
 
     df_bw = bwm_query(one)
     all_pids = df_bw["pid"]  # All probe ids in this experiment
@@ -90,19 +91,18 @@ def get_datas(one, ba):
         else:
             print(" fail")
 
-    fp = open("passing-sessions.json", "w")
+    fp = open(filename, "w")
     json.dump(results, fp)
     fp.close()
     return results
 
 
-def extract_spike_info(eid, pid, one, ba):
+def load_spike_data(eid, pid, one, ba):
     print(" preparing spikesorter..", end="")
     ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
     spikes, clusters, channels = ssl.load_spike_sorting()
     clusters = ssl.merge_clusters(spikes, clusters, channels)
     num_good_units = np.where(clusters["label"] == 1)[0]
-    GOOD_UNIT_COUNTS.append(num_good_units)
 
     unitdata = []
     num_units = len(clusters["cluster_id"])
@@ -134,6 +134,63 @@ def extract_spike_info(eid, pid, one, ba):
     return unitdata, spikedata
 
 
+def get_spike_data(pid):
+    with open(f"{pid}-spikes.pickle", "rb") as f:
+        return pickle.load(f)
+
+
+def download_unit_and_spike_data(one, ba, relevant_datas):
+    filename = "all-units.pickle"
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            data = pickle.load(f)
+        return data  # Comment me out if not generated
+
+    all_units = []
+    for i, data in enumerate(relevant_datas):
+        print(f"Processing ({i}/{len(relevant_datas)})", end="")
+        eid = data["experiment_id"]
+        pid = data["probe_id"]
+        unitdata, spikedata = load_spike_data(eid, pid, one, ba)
+        all_units.extend(unitdata)
+        print(" dumping spikedata..")
+        with open(f"{pid}-spikes.pickle", "wb") as f:
+            pickle.dump(spikedata, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        print("")
+
+    with open(filename, "wb") as f:
+        pickle.dump(all_units, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return all_units
+
+
+def download_trial_data(one, all_session_datas):
+    trials = []
+    for sess in all_session_datas:
+        trials.append(get_trial_data(one, sess["experiment_id"]))
+    return trials
+
+
+def get_trial_data(one, eid):
+    filename = f"{eid}-trials.pickle"
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            return pickle.load(f)
+
+    sl = SessionLoader(eid=eid, one=one)
+    sl.load_trials()
+    eventdata = {}
+
+    for k in list(sl.trials):
+        eventdata[k] = list(sl.trials[k])
+
+    with open(filename, "wb") as f:
+        pickle.dump(eventdata, f)
+
+    return eventdata
+
+
 def main():
     # Download https://github.com/int-brain-lab/paper-brain-wide-map/tree/main
     ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
@@ -144,29 +201,16 @@ def main():
     ibl_cache = Path.home() / 'Downloads' / 'IBL_Cache'
     ibl_cache.mkdir(exist_ok=True, parents=True)
 
-    # df_bw = bwm_query(one)
-    # unit_df = bwm_units(one)
+    df_bw = bwm_query(one)
+    unit_df = bwm_units(one)
 
-    relevant_datas = get_datas(one, ba)
-    all_units = []
-    for i, data in enumerate(relevant_datas):
-        print(f"Processing ({i}/{len(relevant_datas)})", end="")
-        eid = data["experiment_id"]
-        pid = data["probe_id"]
-        unitdata, spikedata = extract_spike_info(eid, pid, one, ba)
-        all_units.extend(unitdata)
-        print(" dumping spikedata..")
-        with open(f"{pid}-spikes.pickle", "wb") as f:
-            pickle.dump(spikedata, f, protocol=pickle.HIGHEST_PROTOCOL)
+    all_session_data = download_session_data(one, ba)
+    all_trial_data = download_trial_data(one, all_session_data)
+    sess = all_session_data[0]
 
-        print("")
+    spikedata = get_spike_data(sess["probe_id"])
+    trialdata = get_trial_data(one, sess["experiment_id"])
 
-    with open("all-units.pickle", "wb") as f:
-        pickle.dump(all_units, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    print("NUM GOOD UNITS")
-    print(GOOD_UNIT_COUNTS)
-    print(sum(GOOD_UNIT_COUNTS))
     tw = 2
     # 96/699 experiments match brain region criteria
     #

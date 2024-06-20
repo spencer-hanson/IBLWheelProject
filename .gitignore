@@ -1,3 +1,4 @@
 paper-brain-wide-map-main/
 .idea
 *.pickle
+*.pyc
