@@ -102,7 +102,7 @@ def load_spike_data(eid, pid, one, ba):
     ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
     spikes, clusters, channels = ssl.load_spike_sorting()
     clusters = ssl.merge_clusters(spikes, clusters, channels)
-    num_good_units = np.where(clusters["label"] == 1)[0]
+    # num_good_units = np.where(clusters["label"] == 1)[0]
 
     unitdata = []
     num_units = len(clusters["cluster_id"])
@@ -135,11 +135,12 @@ def load_spike_data(eid, pid, one, ba):
 
 
 def get_spike_data(pid):
+    # with open(f"spikes-{pid}.pickle", "rb") as f:
     with open(f"{pid}-spikes.pickle", "rb") as f:
         return pickle.load(f)
 
 
-def download_unit_and_spike_data(one, ba, relevant_datas):
+def download_unit_and_spike_data(one, ba, all_session_data):
     filename = "all-units.pickle"
     if os.path.exists(filename):
         with open(filename, "rb") as f:
@@ -147,8 +148,8 @@ def download_unit_and_spike_data(one, ba, relevant_datas):
         return data  # Comment me out if not generated
 
     all_units = []
-    for i, data in enumerate(relevant_datas):
-        print(f"Processing ({i}/{len(relevant_datas)})", end="")
+    for i, data in enumerate(all_session_data):
+        print(f"Processing ({i}/{len(all_session_data)})", end="")
         eid = data["experiment_id"]
         pid = data["probe_id"]
         unitdata, spikedata = load_spike_data(eid, pid, one, ba)
@@ -173,7 +174,7 @@ def download_trial_data(one, all_session_datas):
 
 
 def get_trial_data(one, eid):
-    filename = f"{eid}-trials.pickle"
+    filename = f"trials-{eid}.pickle"
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             return pickle.load(f)
@@ -184,6 +185,11 @@ def get_trial_data(one, eid):
 
     for k in list(sl.trials):
         eventdata[k] = list(sl.trials[k])
+
+    wheel_data = one.load_object(eid, 'wheel', collection='alf')
+    eventdata["wheel_position"] = wheel_data["position"]
+    eventdata["wheel_position_timestamps"] = wheel_data["timestamps"]
+    eventdata["experiment_id"] = eid
 
     with open(filename, "wb") as f:
         pickle.dump(eventdata, f)
@@ -206,6 +212,7 @@ def main():
 
     all_session_data = download_session_data(one, ba)
     all_trial_data = download_trial_data(one, all_session_data)
+    unit_metadata = download_unit_and_spike_data(one, ba, all_session_data)
     sess = all_session_data[0]
 
     spikedata = get_spike_data(sess["probe_id"])
