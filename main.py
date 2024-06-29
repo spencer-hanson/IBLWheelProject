@@ -134,11 +134,19 @@ def load_spike_data(eid, pid, one, ba):
     return unitdata, spikedata
 
 
-def get_spike_data(pid):
+def get_spike_data(pid, eid, one, ba):
     # with open(f"spikes-{pid}.pickle", "rb") as f:
-    with open(f"{pid}-spikes.pickle", "rb") as f:
-        return pickle.load(f)
+    fn = f"{pid}-spikes.pickle"
+    if not os.path.exists(fn):
+        print(f"File {fn} not found, downloading..")
+        _, spikedata = load_spike_data(eid, pid, one, ba)
+        print(f" dumping spikedata into '{fn}'..", end="")
+        with open(fn, "wb") as f:
+            pickle.dump(spikedata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+    print(f"Loading {fn}..")
+    with open(fn, "rb") as f:
+        return pickle.load(f)
 
 def download_unit_and_spike_data(one, ba, all_session_data):
     filename = "all-units.pickle"
@@ -154,9 +162,14 @@ def download_unit_and_spike_data(one, ba, all_session_data):
         pid = data["probe_id"]
         unitdata, spikedata = load_spike_data(eid, pid, one, ba)
         all_units.extend(unitdata)
-        print(" dumping spikedata..")
-        with open(f"{pid}-spikes.pickle", "wb") as f:
-            pickle.dump(spikedata, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle_fn = f"{pid}-spikes.pickle"
+        print(f" dumping spikedata into '{pickle_fn}'..", end="")
+        if os.path.exists(pickle_fn):
+            print(" exists, continuing..")
+            continue
+        else:
+            with open(pickle_fn, "wb") as f:
+                pickle.dump(spikedata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         print("")
 
@@ -215,7 +228,7 @@ def main():
     unit_metadata = download_unit_and_spike_data(one, ba, all_session_data)
     sess = all_session_data[0]
 
-    spikedata = get_spike_data(sess["probe_id"])
+    spikedata = get_spike_data(sess["probe_id"], sess["experiment_id"], one, ba)
     trialdata = get_trial_data(one, sess["experiment_id"])
 
     tw = 2
