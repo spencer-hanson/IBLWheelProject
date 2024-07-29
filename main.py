@@ -148,9 +148,10 @@ def get_spike_data(pid, eid, one, ba):
     with open(fn, "rb") as f:
         return pickle.load(f)
 
-def download_unit_and_spike_data(one, ba, all_session_data):
+
+def download_unit_and_spike_data(one, ba, all_session_data, redownload=False):
     filename = "all-units.pickle"
-    if os.path.exists(filename):
+    if os.path.exists(filename) and not redownload:
         with open(filename, "rb") as f:
             data = pickle.load(f)
         return data  # Comment me out if not generated
@@ -225,7 +226,7 @@ def main():
 
     all_session_data = download_session_data(one, ba)
     all_trial_data = download_trial_data(one, all_session_data)
-    unit_metadata = download_unit_and_spike_data(one, ba, all_session_data)
+    unit_metadata = download_unit_and_spike_data(one, ba, all_session_data, redownload=True)
     sess = all_session_data[0]
 
     spikedata = get_spike_data(sess["probe_id"], sess["experiment_id"], one, ba)
